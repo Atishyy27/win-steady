@@ -12,14 +12,11 @@
 #>
 param([ValidateSet('BOOT','RESUME','INTERVAL','MANUAL')][string]$Trigger = 'MANUAL', [switch]$WhatIf)
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Common.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Parsers.ps1')
 $cfg = Get-SteadyConfig
 $changed = @()
 
-function Get-Index($sub, $set, $kind) {
-    $q = (powercfg /q SCHEME_CURRENT $sub $set 2>$null) -join "`n"
-    if ($q -match "Current $kind Power Setting Index:\s*(0x[0-9a-f]+)") { return [convert]::ToInt32($Matches[1], 16) }
-    return $null
-}
+function Get-Index($sub, $set, $kind) { ConvertFrom-PowerCfgIndex ((powercfg /q SCHEME_CURRENT $sub $set 2>$null) -join "`n") $kind }
 
 foreach ($p in $cfg.drift.powercfg) {
     foreach ($kind in 'AC','DC') {

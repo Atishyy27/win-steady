@@ -11,7 +11,9 @@
   Output: <dataDir>\freeze-ledger.csv, <dataDir>\freeze-report.md
 #>
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Common.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'lib\Parsers.ps1')
 $cfg = Get-SteadyConfig
+& (Join-Path $PSScriptRoot 'Read-CrashDumps.ps1') | Out-Null   # names the faulting driver for any new dump (needs WinDbg)
 $since = (Get-Date).AddDays(-[int]$cfg.freeze.historyDays)
 $csv = Join-Path $cfg.dataDir 'freeze-ledger.csv'
 $known = @{}
@@ -30,8 +32,8 @@ foreach ($b in ($boots | Sort-Object TimeCreated)) {
     $bug = $bugs | Where-Object { & $win $_ } | Select-Object -First 1
     $k   = $kp41 | Where-Object { & $win $_ } | Select-Object -First 1
     $kd = @{}; if ($k) { ([xml]$k.ToXml()).Event.EventData.Data | ForEach-Object { $kd[$_.Name] = $_.'#text' } }
-    $code = if ($bug -and $bug.Message -match 'bugcheck was: (0x[0-9a-f]+)') { $Matches[1] -replace '0x0+', '0x' } else { '' }
-    $lastAlive = if ($b.Message -match 'at (.+?) on (.+?) was unexpected') { ($Matches[2] -replace '[^\d/]','') + ' ' + $Matches[1] } else { '' }
+    $code = if ($bug) { ConvertFrom-BugcheckMessage $bug.Message } else { '' }
+    $lastAlive = ConvertFrom-UnexpectedShutdownMessage $b.Message
     [pscustomobject]@{
         BootTime        = $key
         Type            = if ($code) { 'bluescreen' } else { 'freeze-or-power-loss' }
@@ -56,6 +58,13 @@ $md = @(
     '| Boot after stop | Type | Bug check | Last alive | During sleep | WHEA +-1h |',
     '|---|---|---|---|---|---|'
 ) + ($rows | Sort-Object BootTime -Descending | ForEach-Object { "| $($_.BootTime) | $($_.Type) | $($_.BugCheck) | $($_.LastAlive) | $($_.DuringSleep) | $($_.WheaWithin1h) |" })
+$dcsv = Join-Path $cfg.dataDir 'dumps.csv'
+if (Test-Path $dcsv) {
+    $md += @('', '## Crash dumps: faulting driver (kd !analyze)', '', '| Written | Bug check | Driver | Failure bucket | Process |', '|---|---|---|---|---|')
+    $md += Import-Csv $dcsv | Sort-Object Written -Descending | ForEach-Object { "| $($_.Written) | $($_.BugCheckCode) | $($_.Image) | $($_.FailureBucket) | $($_.Process) |" }
+    $byDriver = Import-Csv $dcsv | Where-Object Image | Group-Object Image | Sort-Object Count -Descending
+    if ($byDriver) { $md += @('', ('Most frequent: ' + (($byDriver | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ', '))) }
+}
 $md | Set-Content -Encoding utf8 (Join-Path $cfg.dataDir 'freeze-report.md')
 Write-SteadyLog 'freeze' "ledger updated: $new new stop(s), $($rows.Count) in window"
 if ($new -gt 0) { Send-SteadyAlert 'freeze' 'Laptop had an unexpected stop' "$new new since last check. See freeze-report.md." }

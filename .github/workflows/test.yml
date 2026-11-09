@@ -1,0 +1,22 @@
+name: test
+on: [push, pull_request]
+jobs:
+  pester:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          Install-Module Pester -Force -Scope CurrentUser -MinimumVersion 5.5
+          $r = Invoke-Pester -Path ./tests -PassThru -Output Detailed
+          if ($r.FailedCount -gt 0) { exit 1 }
+      - name: Parse every script
+        shell: pwsh
+        run: |
+          $bad = 0
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $errs = $null; [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errs) | Out-Null
+            if ($errs) { $bad++; Write-Host "$($_.Name): $($errs[0].Message)" }
+          }
+          if ($bad) { exit 1 }

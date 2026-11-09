@@ -1,5 +1,7 @@
 # win-steady
 
+![test](https://github.com/Atishyy27/win-steady/actions/workflows/test.yml/badge.svg)
+
 Keeps a flaky Windows laptop steady, and keeps the evidence when it isn't.
 
 A zero-dependency PowerShell kit that does three things no single tool did for me:
@@ -23,6 +25,8 @@ Built while chasing two weeks of freezes on a gaming laptop: 17 unexpected stops
 | `Invoke-DriftGuard` | at boot + every 10 min (SYSTEM) | `drift.log`: every revert, with what triggered the check |
 | `Update-FreezeLedger` | at logon + daily | `freeze-ledger.csv` (append-only), `freeze-report.md` |
 | `Watch-Memory` | every 5 min | `memory.csv`, alert after N bad samples in a row |
+| `Read-CrashDumps` | with the ledger, only for new dumps | `dumps.csv`: faulting driver + failure bucket per dump, via Microsoft's `kd.exe` (`!analyze -v`) if WinDbg is installed |
+| `Export-SupportBundle` | when you ask | one zip for a warranty case: report, ledger, driver list, drift log, memory history, minidumps, system summary |
 
 Data lives in `%LOCALAPPDATA%\win-steady`. Logs rotate at 1 MB. Alerts are capped (default 3 a day, one per kind) so they stay a signal.
 
@@ -52,11 +56,29 @@ Try any module by hand first:
 
 Remove with `.\uninstall.ps1` (your settings and data stay).
 
+## Talking to support
+
+```powershell
+.\modules\Export-SupportBundle.ps1          # writes win-steady-support-<date>.zip to your Desktop
+```
+
+The bundle is what support asks for anyway, in one file: how many stops, which were silent freezes,
+which driver each crash dump names, every setting your OEM tool reverted, and your BIOS and driver
+versions. It includes your device serial on purpose (support needs it); review before sending.
+
 ## How it compares
 
-- **WhoCrashed / BlueScreenView / WinDbg** read crash dumps. win-steady covers the stops that never produce one.
-- **Power-plan tools** set sleep or timers once. win-steady keeps re-applying and tells you when something reverted it.
-- **Memory reporters** show usage. win-steady alerts on sustained commit pressure and names the top processes.
+| | win-steady | Dump readers (WhoCrashed, BlueScreenView) | Power-plan tools | Memory reporters | Sensor apps (LibreHardwareMonitor) |
+|---|---|---|---|---|---|
+| Silent freezes (no dump) | yes, with history | no | no | no | no |
+| Faulting driver from dumps | yes (via kd, if installed) | yes, with a GUI | no | no | no |
+| Re-applies reverted settings + audit log | yes | no | set once | no | no |
+| Sustained memory alerts + phone push | yes | no | no | report only | no |
+| Warranty support bundle | yes | no | no | no | no |
+| Temperatures, fans, sensors | no, use LibreHardwareMonitor | no | no | no | yes |
+| GUI | no (CLI + markdown report) | yes | yes | some | yes |
+
+Use win-steady next to those tools, not instead of them.
 
 ## Limits
 
