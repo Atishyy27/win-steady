@@ -17,6 +17,11 @@ if (-not ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal
 $root = $PSScriptRoot
 if (-not (Test-Path (Join-Path $root 'config.json'))) { Copy-Item (Join-Path $root 'config.example.json') (Join-Path $root 'config.json'); Write-Output 'created config.json from config.example.json; edit it to taste.' }
 $cfg = Get-Content (Join-Path $root 'config.json') -Raw | ConvertFrom-Json
+# SYSTEM tasks would expand %LOCALAPPDATA% to the system profile; pin the installing user's path instead.
+if ($cfg.dataDir -match '%') {
+    $cfg.dataDir = [Environment]::ExpandEnvironmentVariables($cfg.dataDir)
+    $cfg | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 (Join-Path $root 'config.json')
+}
 
 function Act($script, $extra = '') {
     New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ("-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"{0}`" {1}" -f (Join-Path $root "modules\$script"), $extra)
