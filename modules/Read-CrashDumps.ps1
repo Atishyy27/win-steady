@@ -30,6 +30,8 @@ $new = 0
 foreach ($d in $dumps) {
     $key = "$($d.Name)|$($d.LastWriteTime.ToString('s'))"
     if ($done.ContainsKey($key)) { continue }
+    # One crash writes both MEMORY.DMP and a minidump; analyse it once, from the minidump.
+    if ($d.Name -eq 'MEMORY.DMP' -and ($dumps | Where-Object { $_.Name -ne 'MEMORY.DMP' -and [math]::Abs(($_.LastWriteTime - $d.LastWriteTime).TotalMinutes) -lt 5 })) { continue }
     $job = Start-Job { param($kd, $dump, $sym) & $kd -z $dump -y "srv*$sym*https://msdl.microsoft.com/download/symbols" -c '!analyze -v; q' 2>&1 | Out-String } -ArgumentList $kd, $d.FullName, $sym
     $text = if (Wait-Job $job -Timeout 600) { Receive-Job $job } else { Stop-Job $job; '' }
     Remove-Job $job -Force -ErrorAction SilentlyContinue
