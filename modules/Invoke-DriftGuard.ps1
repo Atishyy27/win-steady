@@ -56,6 +56,7 @@ if ($changed.Count) {
     $log = Join-Path $cfg.dataDir 'drift.log'
     $today = Get-Date -Format 'yyyy-MM-dd'
     $hb = (Test-Path $log) -and (Select-String -Path $log -Pattern "^$today.*trigger=INTERVAL ok" -Quiet)
-    if ($Trigger -ne 'INTERVAL' -or -not $hb) { Write-SteadyLog 'drift' "trigger=$Trigger ok" }
+    # logEveryCheck: one line per run, so a freeze can be matched to the last known state.
+    if ($Trigger -ne 'INTERVAL' -or -not $hb -or $cfg.drift.logEveryCheck) { Write-SteadyLog 'drift' "trigger=$Trigger ok" }
     Write-Output 'ok: no drift'
 }

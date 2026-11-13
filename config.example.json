@@ -1,35 +1,53 @@
-{
-  "dataDir": "%LOCALAPPDATA%\\win-steady",
-
-  "drift": {
-    "comment": "Power settings to keep pinned. Each runs at boot, on resume and every N minutes; every revert is logged with what triggered the check.",
-    "intervalMinutes": 10,
-    "powercfg": [
-      { "name": "PCIe ASPM off",            "subgroup": "SUB_PCIEXPRESS", "setting": "ASPM",        "ac": 0, "dc": 0 },
-      { "name": "Sleep after (0 = never)",   "subgroup": "SUB_SLEEP",      "setting": "STANDBYIDLE", "ac": 0, "dc": 0 },
-      { "name": "Lid close: do nothing",     "subgroup": "SUB_BUTTONS",    "setting": "LIDACTION",   "ac": 0, "dc": 0 }
-    ],
-    "keepDisabled": [
-      { "name": "Unused onboard Ethernet", "friendlyNameLike": "Realtek PCIe GbE*" }
-    ]
-  },
-
-  "memory": {
-    "intervalMinutes": 5,
-    "freeGbBelow": 2.5,
-    "commitPercentAbove": 85,
-    "sustainedSamples": 2,
-    "topProcesses": 8
-  },
-
-  "freeze": {
-    "historyDays": 30
-  },
-
-  "notify": {
-    "toast": true,
-    "ntfyTopic": "",
-    "ntfyServer": "https://ntfy.sh",
-    "maxPushesPerDay": 3
-  }
+﻿{
+    "dataDir":  "%LOCALAPPDATA%\\win-steady",
+    "drift":  {
+                  "comment":  "Power settings to keep pinned. Each runs at boot, on resume and every N minutes; every revert is logged with what triggered the check.",
+                  "intervalMinutes":  10,
+                  "powercfg":  [
+                                   {
+                                       "name":  "PCIe ASPM off",
+                                       "subgroup":  "SUB_PCIEXPRESS",
+                                       "setting":  "ASPM",
+                                       "ac":  0,
+                                       "dc":  0
+                                   },
+                                   {
+                                       "name":  "Sleep after (0 = never)",
+                                       "subgroup":  "SUB_SLEEP",
+                                       "setting":  "STANDBYIDLE",
+                                       "ac":  0,
+                                       "dc":  0
+                                   },
+                                   {
+                                       "name":  "Lid close: do nothing",
+                                       "subgroup":  "SUB_BUTTONS",
+                                       "setting":  "LIDACTION",
+                                       "ac":  0,
+                                       "dc":  0
+                                   }
+                               ],
+                  "keepDisabled":  [
+                                       {
+                                           "name":  "Unused onboard Ethernet",
+                                           "friendlyNameLike":  "Realtek PCIe GbE*"
+                                       }
+                                   ],
+                  "logEveryCheck":  false
+              },
+    "memory":  {
+                   "intervalMinutes":  5,
+                   "freeGbBelow":  2.5,
+                   "commitPercentAbove":  85,
+                   "sustainedSamples":  2,
+                   "topProcesses":  8
+               },
+    "freeze":  {
+                   "historyDays":  30
+               },
+    "notify":  {
+                   "toast":  true,
+                   "ntfyTopic":  "",
+                   "ntfyServer":  "https://ntfy.sh",
+                   "maxPushesPerDay":  3
+               }
 }
