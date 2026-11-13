@@ -47,7 +47,7 @@ function Write-Vitals {
     $script:lastT = @($i, $k, $u)
     $g = { param($x) if ($pc[$x]) { try { [math]::Round($pc[$x].NextValue(), 1) } catch { '' } } else { '' } }
     $top = ''
-    if ((Get-Date) -ge $script:nextTop) { $top = (Get-Process | Sort-Object WS -Descending | Select-Object -First 3 | ForEach-Object { "$($_.Name):$([int]($_.WS/1MB))" }) -join ' '; $script:nextTop = (Get-Date).AddMinutes(1) }
+    if (((Get-Date) -ge $script:nextTop) -or ($free -lt 2)) { $top = (Get-Process | Sort-Object PrivateMemorySize64 -Descending | Select-Object -First 3 | ForEach-Object { "$($_.Name):$([int]($_.PrivateMemorySize64/1MB))" }) -join ' '; $script:nextTop = (Get-Date).AddMinutes(1) }
     if ((Test-Path $vFile) -and (Get-Item $vFile).Length -gt 5MB) { Move-Item $vFile ($vFile -replace '\.csv$', "-$(Get-Date -Format yyyyMMddHHmm).csv") -Force; [IO.File]::AppendAllText($vFile, "Time,FreeGB,CommitPct,CpuPct,DpcPct,IntPct,DiskQueue,Top3`r`n") }
     [IO.File]::AppendAllText($vFile, ("{0},{1},{2},{3},{4},{5},{6},{7}`r`n" -f (Get-Date -Format s), $free, $commit, $cpu, (& $g 'dpc'), (& $g 'int'), (& $g 'dq'), $top))
 }
