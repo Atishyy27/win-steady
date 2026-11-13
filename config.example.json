@@ -1,4 +1,4 @@
-﻿{
+{
     "dataDir":  "%LOCALAPPDATA%\\win-steady",
     "drift":  {
                   "comment":  "Power settings to keep pinned. Each runs at boot, on resume and every N minutes; every revert is logged with what triggered the check.",
@@ -33,7 +33,8 @@
                                        }
                                    ],
                   "logEveryCheck":  false,
-                  "watchSeconds":  5
+                  "watchSeconds":  5,
+                  "vitalsSeconds":  15
               },
     "memory":  {
                    "intervalMinutes":  5,

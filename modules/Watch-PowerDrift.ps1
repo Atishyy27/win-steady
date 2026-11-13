@@ -24,7 +24,33 @@ Add-Type -Namespace WinSteady -Name Power -MemberDefinition @'
 [DllImport("powrprof.dll")] public static extern uint PowerWriteDCValueIndex(IntPtr root, ref Guid scheme, ref Guid sub, ref Guid setting, uint value);
 [DllImport("powrprof.dll")] public static extern uint PowerSetActiveScheme(IntPtr root, ref Guid scheme);
 [DllImport("kernel32.dll")] public static extern IntPtr LocalFree(IntPtr p);
+[StructLayout(LayoutKind.Sequential)] public struct MEMSTAT { public uint dwLength; public uint dwMemoryLoad; public ulong ullTotalPhys; public ulong ullAvailPhys; public ulong ullTotalPageFile; public ulong ullAvailPageFile; public ulong ullTotalVirtual; public ulong ullAvailVirtual; public ulong ullAvailExtendedVirtual; }
+[DllImport("kernel32.dll")] public static extern bool GlobalMemoryStatusEx(ref MEMSTAT m);
+[DllImport("kernel32.dll")] public static extern bool GetSystemTimes(out long idle, out long kernel, out long user);
 '@
+
+# Vitals: one line every vitalsSeconds to vitals.csv, written with open-append-close so the last
+# lines before a hard freeze are already on disk. Top 3 processes by RAM once a minute.
+$vSec  = if ($cfg.drift.vitalsSeconds) { [int]$cfg.drift.vitalsSeconds } else { 15 }
+$vFile = Join-Path $cfg.dataDir 'vitals.csv'
+if (-not (Test-Path $vFile)) { [IO.File]::AppendAllText($vFile, "Time,FreeGB,CommitPct,CpuPct,DpcPct,IntPct,DiskQueue,Top3`r`n") }
+$pc = @{}
+foreach ($n in @(@('dpc','Processor','% DPC Time','_Total'), @('int','Processor','% Interrupt Time','_Total'), @('dq','PhysicalDisk','Current Disk Queue Length','_Total'))) {
+    try { $pc[$n[0]] = New-Object Diagnostics.PerformanceCounter($n[1], $n[2], $n[3]); [void]$pc[$n[0]].NextValue() } catch { }
+}
+$lastT = $null; $nextV = Get-Date; $nextTop = Get-Date
+function Write-Vitals {
+    $m = New-Object WinSteady.Power+MEMSTAT; $m.dwLength = [Runtime.InteropServices.Marshal]::SizeOf($m); [void][WinSteady.Power]::GlobalMemoryStatusEx([ref]$m)
+    $free = [math]::Round($m.ullAvailPhys / 1GB, 2); $commit = [math]::Round(100 * (1 - $m.ullAvailPageFile / $m.ullTotalPageFile))
+    $i = 0L; $k = 0L; $u = 0L; [void][WinSteady.Power]::GetSystemTimes([ref]$i, [ref]$k, [ref]$u); $cpu = ''
+    if ($script:lastT) { $dt = ($k - $script:lastT[1]) + ($u - $script:lastT[2]); if ($dt -gt 0) { $cpu = [math]::Round(100 * (1 - ($i - $script:lastT[0]) / $dt)) } }
+    $script:lastT = @($i, $k, $u)
+    $g = { param($x) if ($pc[$x]) { try { [math]::Round($pc[$x].NextValue(), 1) } catch { '' } } else { '' } }
+    $top = ''
+    if ((Get-Date) -ge $script:nextTop) { $top = (Get-Process | Sort-Object WS -Descending | Select-Object -First 3 | ForEach-Object { "$($_.Name):$([int]($_.WS/1MB))" }) -join ' '; $script:nextTop = (Get-Date).AddMinutes(1) }
+    if ((Test-Path $vFile) -and (Get-Item $vFile).Length -gt 5MB) { Move-Item $vFile ($vFile -replace '\.csv$', "-$(Get-Date -Format yyyyMMddHHmm).csv") -Force; [IO.File]::AppendAllText($vFile, "Time,FreeGB,CommitPct,CpuPct,DpcPct,IntPct,DiskQueue,Top3`r`n") }
+    [IO.File]::AppendAllText($vFile, ("{0},{1},{2},{3},{4},{5},{6},{7}`r`n" -f (Get-Date -Format s), $free, $commit, $cpu, (& $g 'dpc'), (& $g 'int'), (& $g 'dq'), $top))
+}
 
 # Resolve powercfg aliases (SUB_PCIEXPRESS / ASPM) to GUIDs once, from powercfg's own output.
 $pins = foreach ($p in $cfg.drift.powercfg) {
@@ -51,5 +77,6 @@ do {
         [void][WinSteady.Power]::PowerSetActiveScheme([IntPtr]::Zero, [ref]$scheme)   # make the new values live
         Write-SteadyLog 'drift' "trigger=WATCH REVERTED, re-applied :: $($fixed -join '; ')"
     }
+    if ((Get-Date) -ge $nextV) { try { Write-Vitals } catch { }; $nextV = (Get-Date).AddSeconds($vSec) }
     if (-not $Once) { Start-Sleep -Seconds $Seconds }
 } while (-not $Once)
