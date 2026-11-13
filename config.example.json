@@ -32,7 +32,8 @@
                                            "friendlyNameLike":  "Realtek PCIe GbE*"
                                        }
                                    ],
-                  "logEveryCheck":  false
+                  "logEveryCheck":  false,
+                  "watchSeconds":  5
               },
     "memory":  {
                    "intervalMinutes":  5,

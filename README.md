@@ -1,4 +1,4 @@
-# win-steady
+﻿# win-steady
 
 ![test](https://github.com/Atishyy27/win-steady/actions/workflows/test.yml/badge.svg)
 
@@ -23,6 +23,7 @@ Built while chasing two weeks of freezes on a gaming laptop: 17 unexpected stops
 | Module | Runs | Writes |
 |---|---|---|
 | `Invoke-DriftGuard` | at boot + every 10 min (SYSTEM) | `drift.log`: every revert, with what triggered the check |
+| `Watch-PowerDrift` | always on, every 5 s (SYSTEM) | puts pinned power settings back within seconds when an OEM app rewrites them (Clevo FnKey does this on start and on Fn mode change); logs each fix as `trigger=WATCH` |
 | `Update-FreezeLedger` | at logon + daily | `freeze-ledger.csv` (append-only), `freeze-report.md` |
 | `Watch-Memory` | every 5 min | `memory.csv`, alert after N bad samples in a row |
 | `Read-CrashDumps` | with the ledger, only for new dumps | `dumps.csv`: faulting driver + failure bucket per dump, via Microsoft's `kd.exe` (`!analyze -v`) if WinDbg is installed |

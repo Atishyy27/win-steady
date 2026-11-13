@@ -33,7 +33,9 @@ $every = { param($min) $t = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMin
 
 Register-ScheduledTask -TaskName 'win-steady drift (boot)'     -Action (Act 'Invoke-DriftGuard.ps1' '-Trigger BOOT')     -Trigger (New-ScheduledTaskTrigger -AtStartup) -Principal $sys -Settings $set -Force | Out-Null
 Register-ScheduledTask -TaskName 'win-steady drift (interval)' -Action (Act 'Invoke-DriftGuard.ps1' '-Trigger INTERVAL') -Trigger (& $every ([int]$cfg.drift.intervalMinutes)) -Principal $sys -Settings $set -Force | Out-Null
-Register-ScheduledTask -TaskName 'win-steady memory'           -Action (Act 'Watch-Memory.ps1')                         -Trigger (& $every ([int]$cfg.memory.intervalMinutes)) -Principal $me -Settings $set -Force | Out-Null
+$long = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName 'win-steady drift (watch)'    -Action (Act 'Watch-PowerDrift.ps1')                     -Trigger (New-ScheduledTaskTrigger -AtStartup) -Principal $sys -Settings $long -Force | Out-Null
+Register-ScheduledTask -TaskName 'win-steady memory'          -Action (Act 'Watch-Memory.ps1')                         -Trigger (& $every ([int]$cfg.memory.intervalMinutes)) -Principal $me -Settings $set -Force | Out-Null
 Register-ScheduledTask -TaskName 'win-steady freeze ledger'    -Action (Act 'Update-FreezeLedger.ps1')                  -Trigger @((New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"), (New-ScheduledTaskTrigger -Daily -At 9am)) -Principal $me -Settings $set -Force | Out-Null
 
 Get-ScheduledTask -TaskName 'win-steady*' | ForEach-Object { "{0,-30} {1}" -f $_.TaskName, $_.State }
