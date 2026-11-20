@@ -60,7 +60,7 @@ function Write-Vitals {
         if ($best -and $best.Value -gt 200MB) { $grow = "$($best.Name):+$([int]($best.Value/1MB))" }
     }
     $script:lastProcs = $now
-    if ((Test-Path $vFile) -and (Get-Item $vFile).Length -gt 5MB) { Move-Item $vFile ($vFile -replace '\.csv$', "-$(Get-Date -Format yyyyMMddHHmm).csv") -Force; [IO.File]::AppendAllText($vFile, "Time,FreeGB,CommitPct,CpuPct,DpcPct,IntPct,DiskQueue,Top3,Grower`r`n") }
+    if ((Test-Path $vFile) -and (Get-Item $vFile).Length -gt 5MB) { Move-Item $vFile ($vFile -replace '\.csv$', "-$(Get-Date -Format yyyyMMddHHmm).csv") -Force; Get-ChildItem (Split-Path $vFile) -Filter 'vitals-*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -Skip 8 | Remove-Item -Force -ErrorAction SilentlyContinue; [IO.File]::AppendAllText($vFile, "Time,FreeGB,CommitPct,CpuPct,DpcPct,IntPct,DiskQueue,Top3,Grower`r`n") }
     $script:lastFree = $free
     [IO.File]::AppendAllText($vFile, ("{0},{1},{2},{3},{4},{5},{6},{7},{8}`r`n" -f (Get-Date -Format s), $free, $commit, $cpu, (& $g 'dpc'), (& $g 'int'), (& $g 'dq'), $top, $grow))
 }
