@@ -24,7 +24,7 @@ if ($cfg.dataDir -match '%') {
 }
 
 function Act($script, $extra = '') {
-    New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ("-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"{0}`" {1}" -f (Join-Path $root "modules\$script"), $extra)
+    New-ScheduledTaskAction -Execute 'conhost.exe' -Argument ("--headless powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"{0}`" {1}" -f (Join-Path $root "modules\$script"), $extra)
 }
 $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 $sys = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
