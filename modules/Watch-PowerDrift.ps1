@@ -33,7 +33,7 @@ Add-Type -Namespace WinSteady -Name Power -MemberDefinition @'
 # lines before a hard freeze are already on disk. Top 3 processes by RAM once a minute.
 $vSec  = if ($cfg.drift.vitalsSeconds) { [int]$cfg.drift.vitalsSeconds } else { 15 }
 $vFile = Join-Path $cfg.dataDir 'vitals.csv'
-if (-not (Test-Path $vFile)) { [IO.File]::AppendAllText($vFile, "Time,FreeGB,CommitPct,CpuPct,DpcPct,IntPct,DiskQueue,Top3`r`n") }
+if (-not (Test-Path $vFile)) { [IO.File]::AppendAllText($vFile, "Time,FreeGB,CommitPct,CpuPct,DpcPct,IntPct,DiskQueue,Top3,Grower`r`n") }
 $pc = @{}
 foreach ($n in @(@('dpc','Processor','% DPC Time','_Total'), @('int','Processor','% Interrupt Time','_Total'), @('dq','PhysicalDisk','Current Disk Queue Length','_Total'))) {
     try { $pc[$n[0]] = New-Object Diagnostics.PerformanceCounter($n[1], $n[2], $n[3]); [void]$pc[$n[0]].NextValue() } catch { }
@@ -46,11 +46,23 @@ function Write-Vitals {
     if ($script:lastT) { $dt = ($k - $script:lastT[1]) + ($u - $script:lastT[2]); if ($dt -gt 0) { $cpu = [math]::Round(100 * (1 - ($i - $script:lastT[0]) / $dt)) } }
     $script:lastT = @($i, $k, $u)
     $g = { param($x) if ($pc[$x]) { try { [math]::Round($pc[$x].NextValue(), 1) } catch { '' } } else { '' } }
-    $top = ''
-    if (((Get-Date) -ge $script:nextTop) -or ($free -lt 2) -or ($script:lastFree -and ($script:lastFree - $free) -gt 1.5)) { $top = (Get-Process | Sort-Object PrivateMemorySize64 -Descending | Select-Object -First 3 | ForEach-Object { "$($_.Name):$([int]($_.PrivateMemorySize64/1MB))" }) -join ' '; $script:nextTop = (Get-Date).AddMinutes(1) }
-    if ((Test-Path $vFile) -and (Get-Item $vFile).Length -gt 5MB) { Move-Item $vFile ($vFile -replace '\.csv$', "-$(Get-Date -Format yyyyMMddHHmm).csv") -Force; [IO.File]::AppendAllText($vFile, "Time,FreeGB,CommitPct,CpuPct,DpcPct,IntPct,DiskQueue,Top3`r`n") }
+    # Every sample: top 3 by committed memory AND the biggest grower since the last sample
+    # (process name, pid, +MB). Grouped by name too, so 20 Brave tabs growing together still show.
+    # 21 Nov: a 4 GB grab fell between once-a-minute snapshots and he had to hunt for it by hand.
+    $procs = Get-Process
+    $top = ($procs | Sort-Object PrivateMemorySize64 -Descending | Select-Object -First 3 | ForEach-Object { "$($_.Name):$([int]($_.PrivateMemorySize64/1MB))" }) -join ' '
+    $now = @{}; foreach ($p in $procs) { $now[$p.Id] = @($p.Name, $p.PrivateMemorySize64) }
+    $grow = ''
+    if ($script:lastProcs) {
+        $byName = @{}
+        foreach ($id in $now.Keys) { $old = if ($script:lastProcs.ContainsKey($id)) { $script:lastProcs[$id][1] } else { 0 }; $d = $now[$id][1] - $old; $n = $now[$id][0]; if (-not $byName.ContainsKey($n)) { $byName[$n] = 0 }; $byName[$n] += $d }
+        $best = $byName.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 1
+        if ($best -and $best.Value -gt 200MB) { $grow = "$($best.Name):+$([int]($best.Value/1MB))" }
+    }
+    $script:lastProcs = $now
+    if ((Test-Path $vFile) -and (Get-Item $vFile).Length -gt 5MB) { Move-Item $vFile ($vFile -replace '\.csv$', "-$(Get-Date -Format yyyyMMddHHmm).csv") -Force; [IO.File]::AppendAllText($vFile, "Time,FreeGB,CommitPct,CpuPct,DpcPct,IntPct,DiskQueue,Top3,Grower`r`n") }
     $script:lastFree = $free
-    [IO.File]::AppendAllText($vFile, ("{0},{1},{2},{3},{4},{5},{6},{7}`r`n" -f (Get-Date -Format s), $free, $commit, $cpu, (& $g 'dpc'), (& $g 'int'), (& $g 'dq'), $top))
+    [IO.File]::AppendAllText($vFile, ("{0},{1},{2},{3},{4},{5},{6},{7},{8}`r`n" -f (Get-Date -Format s), $free, $commit, $cpu, (& $g 'dpc'), (& $g 'int'), (& $g 'dq'), $top, $grow))
 }
 
 # Resolve powercfg aliases (SUB_PCIEXPRESS / ASPM) to GUIDs once, from powercfg's own output.

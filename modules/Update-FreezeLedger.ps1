@@ -24,6 +24,20 @@ $bugs  = @(Get-WinEvent -FilterHashtable @{ LogName='System'; Id=1001; ProviderN
 $kp41  = @(Get-WinEvent -FilterHashtable @{ LogName='System'; Id=41; StartTime=$since } -ErrorAction SilentlyContinue)
 $whea  = @(Get-WinEvent -FilterHashtable @{ LogName='System'; Id=17; ProviderName='Microsoft-Windows-WHEA-Logger'; StartTime=$since } -ErrorAction SilentlyContinue)
 
+# Post-mortem from vitals*.csv: the last line written before the stop, and the biggest memory
+# grower in the 3 minutes before it, so nobody has to dig by hand after a freeze (21 Nov).
+$vit = @(Get-ChildItem $cfg.dataDir -Filter 'vitals*.csv' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 3 | ForEach-Object { Import-Csv $_.FullName })
+function Get-PostMortem($bootTime) {
+    $before = @($vit | Where-Object { $_.Time -and ([datetime]$_.Time) -lt $bootTime } | Sort-Object { [datetime]$_.Time })
+    if (-not $before) { return @('', '') }
+    $last = $before[-1]; $lt = [datetime]$last.Time
+    $win = @($before | Where-Object { ([datetime]$_.Time) -ge $lt.AddMinutes(-3) })
+    $g = $win | Where-Object { $_.Grower } | Sort-Object { [int](($_.Grower -split '\+')[-1]) } -Descending | Select-Object -First 1
+    $lastTxt = "$($lt.ToString('HH:mm:ss')) free $($last.FreeGB)GB commit $($last.CommitPct)% cpu $($last.CpuPct)% dq $($last.DiskQueue) top $($last.Top3)"
+    $growTxt = if ($g) { "$($g.Grower) at $(([datetime]$g.Time).ToString('HH:mm:ss'))" } else { 'none over 200 MB' }
+    @($lastTxt, $growTxt)
+}
+
 $new = 0
 foreach ($b in ($boots | Sort-Object TimeCreated)) {
     $key = $b.TimeCreated.ToString('s')
@@ -34,6 +48,7 @@ foreach ($b in ($boots | Sort-Object TimeCreated)) {
     $kd = @{}; if ($k) { ([xml]$k.ToXml()).Event.EventData.Data | ForEach-Object { $kd[$_.Name] = $_.'#text' } }
     $code = if ($bug) { ConvertFrom-BugcheckMessage $bug.Message } else { '' }
     $lastAlive = ConvertFrom-UnexpectedShutdownMessage $b.Message
+    $pm = Get-PostMortem $b.TimeCreated
     [pscustomobject]@{
         BootTime        = $key
         Type            = if ($code) { 'bluescreen' } else { 'freeze-or-power-loss' }
@@ -42,6 +57,8 @@ foreach ($b in ($boots | Sort-Object TimeCreated)) {
         DuringSleep     = if ($kd.SleepInProgress -and $kd.SleepInProgress -ne '0') { 'yes' } else { 'no' }
         PowerButtonHeld = if ($kd.LongPowerButtonPressDetected -eq 'true') { 'yes' } else { 'unknown' }
         WheaWithin1h    = @($whea | Where-Object { [math]::Abs(($_.TimeCreated - $b.TimeCreated).TotalMinutes) -lt 60 }).Count
+        LastVitals      = $pm[0]
+        BiggestGrower   = $pm[1]
     } | Export-Csv $csv -Append -NoTypeInformation
     $new++
 }
